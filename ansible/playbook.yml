@@ -54,11 +54,11 @@
         line: "{{ item }}"
         insertafter: EOF
       with_items:
-        - "192.168.50.208:/mnt/pool0/share              /home/shared         nfs4    _netdev,auto  0  1"
-        - "192.168.50.208:/mnt/pool1/media/TV           /home/media/TV       nfs4    _netdev,auto  0  1"
-        - "192.168.50.208:/mnt/pool0/media/music        /home/media/Music    nfs4    _netdev,auto  0  1"
-        - "192.168.50.208:/mnt/pool1/media/Movies       /home/media/Movies   nfs4    _netdev,auto  0  1"
-        - "192.168.50.208:/mnt/pool0/media/audiobooks   /home/media/Books    nfs4    _netdev,auto  0  1"
+        - "192.168.128.111:/mnt/pool0/share              /home/shared         nfs4    _netdev,auto  0  1"
+        - "192.168.128.111:/mnt/pool1/media/TV           /home/media/TV       nfs4    _netdev,auto  0  1"
+        - "192.168.128.111:/mnt/pool0/media/music        /home/media/Music    nfs4    _netdev,auto  0  1"
+        - "192.168.128.111:/mnt/pool1/media/Movies       /home/media/Movies   nfs4    _netdev,auto  0  1"
+        - "192.168.128.111:/mnt/pool0/media/audiobooks   /home/media/Books    nfs4    _netdev,auto  0  1"
       notify: Mount Filesystems
 
     - name: Enable services

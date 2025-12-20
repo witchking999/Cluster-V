@@ -1,10 +1,10 @@
-export CONSUL_HTTP_ADDR=http://FILL_IN_IP:8500
+export CONSUL_HTTP_ADDR=http://192.168.128.111:8500
 export CONSUL_CACERT=/etc/consul.d/ssl/ca.cert
 export CONSUL_CLIENT_CERT=/etc/consul.d/ssl/consul.cert
 export CONSUL_CLIENT_KEY=/etc/consul.d/ssl/consul.key
-export VAULT_ADDR=http://FILL_IN_IP:8200
+export VAULT_ADDR=http://192.168.128.111:8200
 export VAULT_TOKEN=FILL_IN_TOKEN
-export NOMAD_ADDR=http://FILL_IN_IP:4646
+export NOMAD_ADDR=http://192.168.128.111:4646
 export NOMAD_VAR_region='home'
 export NOMAD_VAR_tld='home'
 export NOMAD_VAR_shared_dir='/home/shared/'
@@ -13,3 +13,12 @@ export NOMAD_VAR_music_dir='/home/media/Music'
 export NOMAD_VAR_movies_dir='/home/media/Movies'
 export NOMAD_VAR_tv_dir='/home/media/TV'
 export NOMAD_VAR_media_dir='/home/media'
+
+export LLAMA_CLOUD_API_KEY=CHANGE_ME_LLAMA_CLOUD_API_KEY
+export OPENAI_API_KEY=CHANGE_ME_OPENAI_API_KEY
+export ABLY_API_KEY=CHANGE_ME_ABLY_API_KEY
+export NVIDIA_API_KEY=CHANGE_ME_NVIDIA_API_KEY
+export MISTRAL_API_KEY=CHANGE_ME_MISTRAL_API_KEY
+export NV_NIM_KEY=CHANGE_ME_NV_NIM_KEY
+export HF_TOKEN=CHANGE_ME_HF_TOKEN
+export VIBE_API_KEY=CHANGE_ME_VIBE_API_KEY

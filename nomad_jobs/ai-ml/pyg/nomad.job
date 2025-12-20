@@ -1,0 +1,85 @@
+job "pyg" {
+  region      = var.region
+  datacenters = [var.datacenter]
+  type        = "service"
+
+  meta {
+    job_file = "nomad_jobs/ai-ml/pyg/nomad.job"
+    version  = "1"
+  }
+
+  group "pyg" {
+    network {
+      mode = "host"
+      port "lab" {
+        to           = 8888
+        host_network = "lan"
+      }
+    }
+
+    restart {
+      attempts = 3
+      delay    = "30s"
+      interval = "10m"
+      mode     = "delay"
+    }
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "45s"
+      auto_revert      = true
+    }
+
+    task "pyg" {
+      driver = "docker"
+      config {
+        image   = "nvcr.io/nvidia/pyg:25.11-py3"
+        runtime = "nvidia"
+        ports   = ["lab"]
+        command = "bash"
+        args = [
+          "-lc",
+          "jupyter lab --ip=0.0.0.0 --port=${NOMAD_PORT_lab} --no-browser --NotebookApp.token='' --NotebookApp.password=''"
+        ]
+      }
+
+      env {
+        NVIDIA_VISIBLE_DEVICES     = "all"
+        NVIDIA_DRIVER_CAPABILITIES = "compute,utility"
+      }
+
+      service {
+        name = "pyg"
+        port = "lab"
+        tags = ["traefik.enable=true"]
+
+        check {
+          type     = "tcp"
+          port     = "lab"
+          interval = "30s"
+          timeout  = "3s"
+        }
+      }
+
+      resources {
+        cpu    = 2000
+        memory = 16384
+        device "gpu" {
+          count = 1
+          constraint {
+            attribute = "${device.vendor}"
+            value     = "nvidia"
+          }
+        }
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+}
+
+variable "datacenter" {
+  type = string
+}

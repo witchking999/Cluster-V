@@ -1,0 +1,139 @@
+---
+- name: Configure worker 192.168.128.80 storage mounts
+  hosts: 192.168.128.80
+  become: true
+  remote_user: root
+  vars:
+    head_node_ip: 192.168.128.111
+  tasks:
+    - name: Ensure directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      with_items:
+        - /home/shared
+        - /home/media/TV
+        - /home/media/Music
+        - /home/media/Movies
+        - /home/media/Books
+
+    - name: Ensure specific /etc/fstab entries
+      lineinfile:
+        path: /etc/fstab
+        line: "{{ item }}"
+        insertafter: EOF
+      with_items:
+        - "{{ head_node_ip }}:/mnt/pool0/share              /home/shared         nfs4    _netdev,auto  0  1"
+        - "{{ head_node_ip }}:/mnt/pool1/media/TV           /home/media/TV       nfs4    _netdev,auto  0  1"
+        - "{{ head_node_ip }}:/mnt/pool0/media/music        /home/media/Music    nfs4    _netdev,auto  0  1"
+        - "{{ head_node_ip }}:/mnt/pool1/media/Movies       /home/media/Movies   nfs4    _netdev,auto  0  1"
+        - "{{ head_node_ip }}:/mnt/pool0/media/audiobooks   /home/media/Books    nfs4    _netdev,auto  0  1"
+      notify: Mount Filesystems
+
+    - name: Install NFS and Docker dependencies
+      apt:
+        name:
+          - nfs-common
+          - docker.io
+        state: present
+        update_cache: yes
+
+  handlers:
+    - name: Mount Filesystems
+      command: mount -a
+
+- name: Configure worker 192.168.128.80 as Nomad/Consul client
+  hosts: 192.168.128.80
+  become: true
+  remote_user: root
+  vars:
+    nomad_server_ips:
+      - 192.168.128.111
+  tasks:
+    - name: Ensure directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      with_items:
+        - /var/lib/nomad
+        - /var/lib/consul
+        - /etc/nomad.d
+        - /etc/consul.d
+
+    - name: Manage systemd service file nomad
+      copy:
+        src: configs/nomad.service
+        dest: /lib/systemd/system/nomad.service
+      notify: Reload systemd
+
+    - name: Manage systemd service file consul
+      copy:
+        src: configs/consul.service
+        dest: /lib/systemd/system/consul.service
+      notify: Reload systemd
+
+    - name: manage nomad config
+      template:
+        src: configs/nomad.hcl.j2
+        dest: /etc/nomad.d/nomad.hcl
+      notify: Restart Service
+
+    - name: manage consul config
+      template:
+        src: configs/consul.hcl.j2
+        dest: /etc/consul.d/server.hcl
+
+    - name: Add HashiCorp APT repository key
+      apt_key:
+        url: https://apt.releases.hashicorp.com/gpg
+        state: present
+        validate_certs: no
+        keyring: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+    - name: Configure HashiCorp APT repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
+
+    - name: Install Apt packages
+      apt:
+        name:
+          - nomad=1.10.4-1
+          - consul=1.19.1-1
+        dpkg_options: 'force-confdef,force-confold'
+        update_cache: true
+        state: latest
+        allow_downgrade: true
+
+    - name: Modify sysctl entry for net.ipv4.ip_nonlocal_bind
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+      with_items:
+        - { name: "net.ipv4.ip_nonlocal_bind", value: "1" }
+        - { name: "net.ipv4.conf.all.forwarding", value: "1" }
+      notify: Apply Sysctl Changes
+
+    - name: Enable services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      with_items:
+        - nomad
+        - consul
+
+  handlers:
+    - name: Restart Service
+      service:
+        name: nomad
+        state: restarted
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Apply Sysctl Changes
+      command: sysctl -p /etc/sysctl.conf

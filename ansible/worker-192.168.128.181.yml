@@ -4,6 +4,14 @@
   become: true
   remote_user: root
   vars:
+    head_node_ip: "{{ lookup('env', 'HEAD_NODE_IP') | default('192.168.128.111', true) }}"
+    nfs_server: "{{ lookup('env', 'NFS_SERVER') | default(head_node_ip, true) }}"
+    nfs_exports:
+      - { remote: "{{ nfs_server }}:/mnt/pool0/share", mount: "/home/shared", fstype: "nfs4", opts: "_netdev,auto" }
+      - { remote: "{{ nfs_server }}:/mnt/pool1/media/TV", mount: "/home/media/TV", fstype: "nfs4", opts: "_netdev,auto" }
+      - { remote: "{{ nfs_server }}:/mnt/pool0/media/music", mount: "/home/media/Music", fstype: "nfs4", opts: "_netdev,auto" }
+      - { remote: "{{ nfs_server }}:/mnt/pool1/media/Movies", mount: "/home/media/Movies", fstype: "nfs4", opts: "_netdev,auto" }
+      - { remote: "{{ nfs_server }}:/mnt/pool0/media/audiobooks", mount: "/home/media/Books", fstype: "nfs4", opts: "_netdev,auto" }
     head_node_ip: 192.168.128.111
   tasks:
     - name: Ensure directories exist
@@ -18,6 +26,24 @@
         - /home/media/Movies
         - /home/media/Books
 
+    - name: Ensure NFS mounts are present in fstab (non-blocking)
+      mount:
+        src: "{{ item.remote }}"
+        path: "{{ item.mount }}"
+        fstype: "{{ item.fstype | default('nfs4') }}"
+        opts: "{{ item.opts | default('_netdev,auto') }}"
+        state: present
+      loop: "{{ nfs_exports }}"
+
+    - name: Attempt to mount NFS exports if reachable
+      mount:
+        src: "{{ item.remote }}"
+        path: "{{ item.mount }}"
+        fstype: "{{ item.fstype | default('nfs4') }}"
+        opts: "{{ item.opts | default('_netdev,auto') }}"
+        state: mounted
+      loop: "{{ nfs_exports }}"
+      ignore_errors: true
     - name: Ensure specific /etc/fstab entries
       lineinfile:
         path: /etc/fstab
@@ -48,6 +74,9 @@
   become: true
   remote_user: root
   vars:
+    head_node_ip: "{{ lookup('env', 'HEAD_NODE_IP') | default('192.168.128.111', true) }}"
+    nomad_server_ips_value: "{{ nomad_server_ips | default(lookup('env', 'NOMAD_SERVER_IPS') | default(head_node_ip, true), true) }}"
+    nomad_server_ips_list: "{{ (nomad_server_ips_value | string).split(',') }}"
     nomad_server_ips:
       - 192.168.128.111
   tasks:
@@ -64,24 +93,28 @@
 
     - name: Manage systemd service file nomad
       copy:
+        src: "{{ playbook_dir }}/../configs/nomad.service"
         src: configs/nomad.service
         dest: /lib/systemd/system/nomad.service
       notify: Reload systemd
 
     - name: Manage systemd service file consul
       copy:
+        src: "{{ playbook_dir }}/../configs/consul.service"
         src: configs/consul.service
         dest: /lib/systemd/system/consul.service
       notify: Reload systemd
 
     - name: manage nomad config
       template:
+        src: "{{ playbook_dir }}/../configs/nomad.hcl.j2"
         src: configs/nomad.hcl.j2
         dest: /etc/nomad.d/nomad.hcl
       notify: Restart Service
 
     - name: manage consul config
       template:
+        src: "{{ playbook_dir }}/../configs/consul.hcl.j2"
         src: configs/consul.hcl.j2
         dest: /etc/consul.d/server.hcl
 

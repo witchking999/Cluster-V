@@ -4,6 +4,17 @@
     - lan-client-server
     - lan-client
     - cheese
+  vars:
+    head_node_ip: "{{ lookup('env', 'HEAD_NODE_IP') | default('192.168.128.111', true) }}"
+    nfs_server: "{{ lookup('env', 'NFS_SERVER') | default(head_node_ip, true) }}"
+    nfs_exports:
+      - { remote: "{{ nfs_server }}:/mnt/pool0/share", mount: "/home/shared", fstype: "nfs4", opts: "_netdev,auto" }
+      - { remote: "{{ nfs_server }}:/mnt/pool1/media/TV", mount: "/home/media/TV", fstype: "nfs4", opts: "_netdev,auto" }
+      - { remote: "{{ nfs_server }}:/mnt/pool0/media/music", mount: "/home/media/Music", fstype: "nfs4", opts: "_netdev,auto" }
+      - { remote: "{{ nfs_server }}:/mnt/pool1/media/Movies", mount: "/home/media/Movies", fstype: "nfs4", opts: "_netdev,auto" }
+      - { remote: "{{ nfs_server }}:/mnt/pool0/media/audiobooks", mount: "/home/media/Books", fstype: "nfs4", opts: "_netdev,auto" }
+  serial: 1
+  max_fail_percentage: 100
   become: true
   remote_user: root
   tasks:
@@ -48,6 +59,24 @@
           - multipath-tools
           - scsitools
 
+    - name: Ensure NFS mounts are present in fstab (non-blocking)
+      mount:
+        src: "{{ item.remote }}"
+        path: "{{ item.mount }}"
+        fstype: "{{ item.fstype | default('nfs4') }}"
+        opts: "{{ item.opts | default('_netdev,auto') }}"
+        state: present
+      loop: "{{ nfs_exports }}"
+
+    - name: Attempt to mount NFS exports if reachable
+      mount:
+        src: "{{ item.remote }}"
+        path: "{{ item.mount }}"
+        fstype: "{{ item.fstype | default('nfs4') }}"
+        opts: "{{ item.opts | default('_netdev,auto') }}"
+        state: mounted
+      loop: "{{ nfs_exports }}"
+      ignore_errors: true
     - name: Ensure specific /etc/fstab entries
       lineinfile:
         path: /etc/fstab
@@ -70,16 +99,18 @@
         - open-iscsi
         - multipath-tools
 
-  handlers:
-    - name: Mount Filesystems
-      command: mount -a
-
 - name: Update configuration, execute command, and install packages
   hosts: 
     - lan-client-server
     - lan-client
     - wan-clients
     - cheese
+  serial: 1
+  max_fail_percentage: 100
+  vars:
+    head_node_ip: "{{ lookup('env', 'HEAD_NODE_IP') | default('192.168.128.111', true) }}"
+    nomad_server_ips_value: "{{ nomad_server_ips | default(lookup('env', 'NOMAD_SERVER_IPS') | default(head_node_ip, true), true) }}"
+    nomad_server_ips_list: "{{ (nomad_server_ips_value | string).split(',') }}"
   remote_user: root
   #roles:
   #  - role: artis3n.tailscale
@@ -101,25 +132,25 @@
 
     - name: Manage systemd service file nomad
       copy:
-        src: configs/nomad.service
+        src: "{{ playbook_dir }}/../configs/nomad.service"
         dest: /lib/systemd/system/nomad.service
       notify: Reload systemd
 
     - name: Manage systemd service file consul
       copy:
-        src: configs/consul.service
+        src: "{{ playbook_dir }}/../configs/consul.service"
         dest: /lib/systemd/system/consul.service
       notify: Reload systemd
 
     - name: manage nomad config
       template:
-        src: configs/nomad.hcl.j2
+        src: "{{ playbook_dir }}/../configs/nomad.hcl.j2"
         dest: /etc/nomad.d/nomad.hcl
       notify: Restart Service
 
     - name: manage consul config
       template:
-        src: configs/consul.hcl.j2
+        src: "{{ playbook_dir }}/../configs/consul.hcl.j2"
         dest: /etc/consul.d/server.hcl
 
     - name: Add HashiCorp APT repository key
@@ -173,9 +204,6 @@
       systemd:
         daemon_reload: yes
 
-    - name: Mount Filesystems
-      command: mount -a
-
     - name: Apply Sysctl Changes
       command: sysctl -p /etc/sysctl.conf
 
@@ -184,6 +212,8 @@
     - all
   become: yes
   remote_user: root
+  serial: 1
+  max_fail_percentage: 100
   gather_facts: yes
 
   vars:

@@ -1,0 +1,91 @@
+job "vllm" {
+  region      = var.region
+  datacenters = [var.datacenter]
+  type        = "service"
+
+  meta {
+    job_file = "nomad_jobs/ai-ml/vllm/nomad.job"
+    version  = "1"
+  }
+
+  group "vllm" {
+    network {
+      mode = "host"
+      port "http" {
+        to           = 8000
+        host_network = "lan"
+      }
+    }
+
+    restart {
+      attempts = 3
+      delay    = "30s"
+      interval = "10m"
+      mode     = "delay"
+    }
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "45s"
+      auto_revert      = true
+    }
+
+    task "vllm" {
+      driver = "docker"
+      config {
+        image   = "nvcr.io/nvidia/vllm:25.09-py3"
+        runtime = "nvidia"
+        ports   = ["http"]
+        command = "bash"
+        args = [
+          "-lc",
+          "python3 -m vllm.entrypoints.openai.api_server --host 0.0.0.0 --port ${NOMAD_PORT_http} --model ${var.vllm_model}"
+        ]
+      }
+
+      env {
+        NVIDIA_VISIBLE_DEVICES     = "all"
+        NVIDIA_DRIVER_CAPABILITIES = "compute,utility"
+      }
+
+      service {
+        name = "vllm"
+        port = "http"
+        tags = ["traefik.enable=true"]
+
+        check {
+          type     = "tcp"
+          port     = "http"
+          interval = "30s"
+          timeout  = "3s"
+        }
+      }
+
+      resources {
+        cpu    = 2000
+        memory = 16384
+        device "gpu" {
+          count        = 1
+          constraint {
+            attribute = "${device.vendor}"
+            value     = "nvidia"
+          }
+        }
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+}
+
+variable "datacenter" {
+  type = string
+}
+
+variable "vllm_model" {
+  type        = string
+  description = "Model name served by vLLM"
+  default     = "meta-llama/Meta-Llama-3-8B-Instruct"
+}

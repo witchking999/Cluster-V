@@ -1,0 +1,85 @@
+job "ray-head" {
+  region      = var.region
+  datacenters = [var.datacenter]
+  type        = "service"
+
+  meta {
+    job_file = "nomad_jobs/ai-ml/ray-head/nomad.job"
+    version  = "1"
+  }
+
+  group "head" {
+    network {
+      mode = "host"
+      port "gcs" {
+        static       = 6379
+        host_network = "lan"
+      }
+      port "dashboard" {
+        static       = 8265
+        host_network = "lan"
+      }
+      port "client" {
+        static       = 10001
+        host_network = "lan"
+      }
+    }
+
+    restart {
+      attempts = 3
+      delay    = "30s"
+      interval = "10m"
+      mode     = "delay"
+    }
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "45s"
+      auto_revert      = true
+    }
+
+    task "ray-head" {
+      driver = "docker"
+      config {
+        image   = "rayproject/ray:2.31.0-py310"
+        ports   = ["gcs", "dashboard", "client"]
+        command = "bash"
+        args = [
+          "-lc",
+          "ray start --head --dashboard-host=0.0.0.0 --port=${NOMAD_PORT_gcs} --dashboard-port=${NOMAD_PORT_dashboard} --node-ip-address=${NOMAD_IP_gcs} --object-manager-port=8076 --temp-dir=/tmp/ray"
+        ]
+      }
+
+      env {
+        RAY_DISABLE_DOCKER_CPU_WARNING = "1"
+      }
+
+      service {
+        name = "ray-head"
+        port = "dashboard"
+        tags = ["traefik.enable=true"]
+
+        check {
+          type     = "http"
+          path     = "/"
+          port     = "dashboard"
+          interval = "30s"
+          timeout  = "3s"
+        }
+      }
+
+      resources {
+        cpu    = 1000
+        memory = 4096
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+}
+
+variable "datacenter" {
+  type = string
+}

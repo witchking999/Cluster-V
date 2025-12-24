@@ -4,6 +4,12 @@ set -euo pipefail
 ROLE="${ROLE:-}"
 HEAD_IP="${HEAD_IP:-192.168.128.111}"
 NFS_SERVER="${NFS_SERVER:-$HEAD_IP}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Try git to locate repo root, fallback to script relative path.
+REPO_ROOT="${REPO_ROOT:-$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null || cd "${SCRIPT_DIR}/../.." && pwd)}"
+EXTRA_API_KEYS_JSON="${EXTRA_API_KEYS_JSON:-[]}"
+# Baseline keys we always prompt for (placeholders exist in envrc).
+DEFAULT_API_KEYS=(LLAMA_CLOUD_API_KEY OPENAI_API_KEY ABLY_API_KEY NVIDIA_API_KEY MISTRAL_API_KEY NV_NIM_KEY HF_TOKEN VIBE_API_KEY)
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 EXTRA_API_KEYS_JSON="${EXTRA_API_KEYS_JSON:-[]}"
 
@@ -35,6 +41,22 @@ ENVRC_LOCAL="${REPO_ROOT}/.envrc.local"
 touch "${ENVRC_LOCAL}"
 direnv allow "${REPO_ROOT}" || true
 
+# Collect keys to prompt: defaults + extra list from terraform var.
+if command -v jq >/dev/null 2>&1; then
+  mapfile -t EXTRA_KEYS < <(echo "${EXTRA_API_KEYS_JSON}" | jq -r '.[]?' 2>/dev/null || true)
+else
+  # Fallback: split on commas if provided as plain string.
+  IFS=',' read -r -a EXTRA_KEYS <<<"${EXTRA_API_KEYS_JSON:-}"
+fi
+
+PROMPT_KEYS=("${DEFAULT_API_KEYS[@]}" "${EXTRA_KEYS[@]}")
+if [[ ${#PROMPT_KEYS[@]} -gt 0 ]]; then
+  echo "🔐 Enter values for API keys (stored in .envrc.local, leave blank to skip):"
+  for key in "${PROMPT_KEYS[@]}"; do
+    # Avoid duplicate prompts for repeated keys.
+    if grep -q "^export ${key}=" "${ENVRC_LOCAL}"; then
+      continue
+    fi
 # Prompt for any additional API keys requested by the caller.
 if command -v jq >/dev/null 2>&1; then
   mapfile -t ADDITIONAL_KEYS < <(echo "${EXTRA_API_KEYS_JSON}" | jq -r '.[]?' 2>/dev/null || true)

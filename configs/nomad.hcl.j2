@@ -6,7 +6,7 @@ datacenter = {% if "cheese" in group_names %}"cheese"{% else %}"dc1"{% endif %}
 log_level = "warn"
 bind_addr = "0.0.0.0"
 region = "home"
-
+https://github.com/witchking999/Cluster-V/pull/3/conflict?name=configs%252Fnomad.hcl.j2&ancestor_oid=36aa4fca74c3e706af2e6cf126f1dcc3886f3011&base_oid=e35bcdebd200618293e582eabaf45d8037cf66c1&head_oid=7648f13f6a26d367bfc150e216038eced7caa373
 server {
   enabled          = {% if "lan-client-server" in group_names or inventory_hostname == "192.168.128.111" %}true{% else %}false{% endif %}
   bootstrap_expect = {{ nomad_servers | length }}

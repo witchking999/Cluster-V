@@ -10,6 +10,8 @@ REPO_ROOT="${REPO_ROOT:-$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/de
 EXTRA_API_KEYS_JSON="${EXTRA_API_KEYS_JSON:-[]}"
 # Baseline keys we always prompt for (placeholders exist in envrc).
 DEFAULT_API_KEYS=(LLAMA_CLOUD_API_KEY OPENAI_API_KEY ABLY_API_KEY NVIDIA_API_KEY MISTRAL_API_KEY NV_NIM_KEY HF_TOKEN VIBE_API_KEY)
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+EXTRA_API_KEYS_JSON="${EXTRA_API_KEYS_JSON:-[]}"
 
 if [[ -z "${ROLE}" ]]; then
   echo "ROLE must be set to head or worker." >&2
@@ -55,6 +57,16 @@ if [[ ${#PROMPT_KEYS[@]} -gt 0 ]]; then
     if grep -q "^export ${key}=" "${ENVRC_LOCAL}"; then
       continue
     fi
+# Prompt for any additional API keys requested by the caller.
+if command -v jq >/dev/null 2>&1; then
+  mapfile -t ADDITIONAL_KEYS < <(echo "${EXTRA_API_KEYS_JSON}" | jq -r '.[]?' 2>/dev/null || true)
+else
+  ADDITIONAL_KEYS=()
+fi
+
+if [[ ${#ADDITIONAL_KEYS[@]} -gt 0 ]]; then
+  echo "🔐 Enter values for additional API keys (stored in .envrc.local, leave blank to skip):"
+  for key in "${ADDITIONAL_KEYS[@]}"; do
     read -r -s -p "  ${key}: " value || true
     echo
     if [[ -n "${value}" ]]; then

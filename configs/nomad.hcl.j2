@@ -1,4 +1,5 @@
 #jinja2: trim_blocks:False
+{% set nomad_servers = nomad_server_ips_list | default(['192.168.128.111']) %}
 data_dir = "/var/lib/nomad/"
 datacenter = {% if "cheese" in group_names %}"cheese"{% else %}"dc1"{% endif %}
 log_level = "warn"
@@ -6,10 +7,10 @@ bind_addr = "0.0.0.0"
 region = "home"
 
 server {
-  enabled          = {% if "lan-client-server" in group_names %}true{% else %}false{% endif %}
-  bootstrap_expect = 3
+  enabled          = {% if "lan-client-server" in group_names or inventory_hostname == "192.168.128.111" %}true{% else %}false{% endif %}
+  bootstrap_expect = {{ nomad_servers | length }}
   server_join {
-    retry_join     = ["192.168.50.39", "192.168.50.113", "192.168.50.85"]
+    retry_join     = {{ nomad_servers | tojson }}
     retry_max      = 3
     retry_interval = "15s"
   }
@@ -21,7 +22,7 @@ server {
 client {
   enabled = true
 {% raw %}
-  network_interface = "{{ GetPrivateInterfaces | include \"network\" \"192.168.50.0/24\" | attr \"name\" }}"
+  network_interface = "{{ GetPrivateInterfaces | include \"network\" \"192.168.128.0/24\" | attr \"name\" }}"
 {% endraw %}
   options {
     docker.auth.config = "/root/.docker/config.json"
@@ -45,7 +46,7 @@ client {
   }
 
   host_network "lan" {
-    cidr = "192.168.50.0/24"
+    cidr = "192.168.128.0/24"
     reserved_ports = "22"
   }
 
@@ -72,9 +73,9 @@ telemetry {
 }
 {% raw %}
 advertise {
-  http = "{{ GetPrivateInterfaces | include \"network\" \"192.168.50.0/24\" | attr \"address\" }}:4646"
-  rpc = "{{ GetPrivateInterfaces | include \"network\" \"192.168.50.0/24\" | attr \"address\" }}:4647"
-  serf = "{{ GetPrivateInterfaces | include \"network\" \"192.168.50.0/24\" | attr \"address\" }}:4648"
+  http = "{{ GetPrivateInterfaces | include \"network\" \"192.168.128.0/24\" | attr \"address\" }}:4646"
+  rpc = "{{ GetPrivateInterfaces | include \"network\" \"192.168.128.0/24\" | attr \"address\" }}:4647"
+  serf = "{{ GetPrivateInterfaces | include \"network\" \"192.168.128.0/24\" | attr \"address\" }}:4648"
 }
 {% endraw %}
 consul {
@@ -111,5 +112,11 @@ plugin "docker" {
       enabled      = true
       selinuxlabel = "z"
     }
+  }
+}
+
+plugin "nvidia-gpu" {
+  config {
+    enabled = true
   }
 }

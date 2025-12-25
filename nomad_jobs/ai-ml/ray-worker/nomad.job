@@ -1,0 +1,105 @@
+job "ray-worker" {
+  region      = var.region
+  datacenters = [var.datacenter]
+  type        = "service"
+
+  meta {
+    job_file = "nomad_jobs/ai-ml/ray-worker/nomad.job"
+    version  = "1"
+  }
+
+  group "worker" {
+    count = var.worker_count
+
+    constraint {
+      attribute = "${node.unique.name}"
+      operator  = "set_contains"
+      value     = "${var.allowed_nodes}"
+    }
+
+    network {
+      mode = "host"
+      port "gcs" {
+        static       = 6379
+        host_network = "lan"
+      }
+    }
+
+    restart {
+      attempts = 3
+      delay    = "30s"
+      interval = "10m"
+      mode     = "delay"
+    }
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "45s"
+      auto_revert      = true
+    }
+
+    task "ray-worker" {
+      driver = "docker"
+      config {
+        image   = "rayproject/ray:2.31.0-py310"
+        runtime = "nvidia"
+        ports   = ["gcs"]
+        command = "bash"
+        args = [
+          "-lc",
+          "ray start --address=${var.head_address}:${NOMAD_PORT_gcs} --node-ip-address=${NOMAD_IP_gcs} --object-manager-port=8076 --temp-dir=/tmp/ray"
+        ]
+      }
+
+      env {
+        NVIDIA_VISIBLE_DEVICES     = "all"
+        NVIDIA_DRIVER_CAPABILITIES = "compute,utility"
+        RAY_DISABLE_DOCKER_CPU_WARNING = "1"
+      }
+
+      resources {
+        cpu    = 2000
+        memory = 16384
+        device "gpu" {
+          count = var.gpu_count
+          constraint {
+            attribute = "${device.vendor}"
+            value     = "nvidia"
+          }
+        }
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+}
+
+variable "datacenter" {
+  type = string
+}
+
+variable "head_address" {
+  type        = string
+  description = "Address (hostname or IP) of the Ray head node"
+  default     = "ray-head.service.consul"
+}
+
+variable "worker_count" {
+  type        = number
+  description = "Number of Ray workers to run"
+  default     = 2
+}
+
+variable "gpu_count" {
+  type        = number
+  description = "GPUs to attach per worker allocation"
+  default     = 1
+}
+
+variable "allowed_nodes" {
+  type        = string
+  description = "Comma-separated list of node names eligible for Ray workers"
+  default     = ""
+}

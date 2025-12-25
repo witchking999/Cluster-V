@@ -10,6 +10,8 @@ REPO_ROOT="${REPO_ROOT:-$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/de
 EXTRA_API_KEYS_JSON="${EXTRA_API_KEYS_JSON:-[]}"
 # Baseline keys we always prompt for (placeholders exist in envrc).
 DEFAULT_API_KEYS=(LLAMA_CLOUD_API_KEY OPENAI_API_KEY ABLY_API_KEY NVIDIA_API_KEY MISTRAL_API_KEY NV_NIM_KEY HF_TOKEN VIBE_API_KEY)
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+EXTRA_API_KEYS_JSON="${EXTRA_API_KEYS_JSON:-[]}"
 
 if [[ -z "${ROLE}" ]]; then
   echo "ROLE must be set to head or worker." >&2
@@ -44,6 +46,9 @@ if [[ ! -f "${ENVRC_PATH}" ]]; then
     touch "${ENVRC_PATH}"
   }
 fi
+ENVRC_LOCAL="${REPO_ROOT}/.envrc.local"
+touch "${ENVRC_LOCAL}"
+direnv allow "${REPO_ROOT}" || true
 
 # Collect keys to prompt: defaults + extra list from terraform var.
 if command -v jq >/dev/null 2>&1; then
@@ -65,6 +70,26 @@ if [[ ${#PROMPT_KEYS[@]} -gt 0 ]]; then
     echo
     if [[ -n "${value}" ]]; then
       echo "export ${key}=${value}" >> "${ENVRC_PATH}"
+  echo "🔐 Enter values for API keys (stored in .envrc.local, leave blank to skip):"
+  for key in "${PROMPT_KEYS[@]}"; do
+    # Avoid duplicate prompts for repeated keys.
+    if grep -q "^export ${key}=" "${ENVRC_LOCAL}"; then
+      continue
+    fi
+# Prompt for any additional API keys requested by the caller.
+if command -v jq >/dev/null 2>&1; then
+  mapfile -t ADDITIONAL_KEYS < <(echo "${EXTRA_API_KEYS_JSON}" | jq -r '.[]?' 2>/dev/null || true)
+else
+  ADDITIONAL_KEYS=()
+fi
+
+if [[ ${#ADDITIONAL_KEYS[@]} -gt 0 ]]; then
+  echo "🔐 Enter values for additional API keys (stored in .envrc.local, leave blank to skip):"
+  for key in "${ADDITIONAL_KEYS[@]}"; do
+    read -r -s -p "  ${key}: " value || true
+    echo
+    if [[ -n "${value}" ]]; then
+      echo "export ${key}=${value}" >> "${ENVRC_LOCAL}"
     fi
   done
 fi

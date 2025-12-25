@@ -12,6 +12,7 @@
       - { remote: "{{ nfs_server }}:/mnt/pool0/media/music", mount: "/home/media/Music", fstype: "nfs4", opts: "_netdev,auto" }
       - { remote: "{{ nfs_server }}:/mnt/pool1/media/Movies", mount: "/home/media/Movies", fstype: "nfs4", opts: "_netdev,auto" }
       - { remote: "{{ nfs_server }}:/mnt/pool0/media/audiobooks", mount: "/home/media/Books", fstype: "nfs4", opts: "_netdev,auto" }
+    head_node_ip: 192.168.128.111
   tasks:
     - name: Ensure directories exist
       file:
@@ -43,6 +44,18 @@
         state: mounted
       loop: "{{ nfs_exports }}"
       ignore_errors: true
+    - name: Ensure specific /etc/fstab entries
+      lineinfile:
+        path: /etc/fstab
+        line: "{{ item }}"
+        insertafter: EOF
+      with_items:
+        - "{{ head_node_ip }}:/mnt/pool0/share              /home/shared         nfs4    _netdev,auto  0  1"
+        - "{{ head_node_ip }}:/mnt/pool1/media/TV           /home/media/TV       nfs4    _netdev,auto  0  1"
+        - "{{ head_node_ip }}:/mnt/pool0/media/music        /home/media/Music    nfs4    _netdev,auto  0  1"
+        - "{{ head_node_ip }}:/mnt/pool1/media/Movies       /home/media/Movies   nfs4    _netdev,auto  0  1"
+        - "{{ head_node_ip }}:/mnt/pool0/media/audiobooks   /home/media/Books    nfs4    _netdev,auto  0  1"
+      notify: Mount Filesystems
 
     - name: Install NFS and Docker dependencies
       apt:
@@ -52,6 +65,10 @@
         state: present
         update_cache: yes
 
+  handlers:
+    - name: Mount Filesystems
+      command: mount -a
+
 - name: Configure worker 192.168.128.181 as Nomad/Consul client
   hosts: 192.168.128.181
   become: true
@@ -60,6 +77,8 @@
     head_node_ip: "{{ lookup('env', 'HEAD_NODE_IP') | default('192.168.128.111', true) }}"
     nomad_server_ips_value: "{{ nomad_server_ips | default(lookup('env', 'NOMAD_SERVER_IPS') | default(head_node_ip, true), true) }}"
     nomad_server_ips_list: "{{ (nomad_server_ips_value | string).split(',') }}"
+    nomad_server_ips:
+      - 192.168.128.111
   tasks:
     - name: Ensure directories exist
       file:
@@ -75,24 +94,28 @@
     - name: Manage systemd service file nomad
       copy:
         src: "{{ playbook_dir }}/../configs/nomad.service"
+        src: configs/nomad.service
         dest: /lib/systemd/system/nomad.service
       notify: Reload systemd
 
     - name: Manage systemd service file consul
       copy:
         src: "{{ playbook_dir }}/../configs/consul.service"
+        src: configs/consul.service
         dest: /lib/systemd/system/consul.service
       notify: Reload systemd
 
     - name: manage nomad config
       template:
         src: "{{ playbook_dir }}/../configs/nomad.hcl.j2"
+        src: configs/nomad.hcl.j2
         dest: /etc/nomad.d/nomad.hcl
       notify: Restart Service
 
     - name: manage consul config
       template:
         src: "{{ playbook_dir }}/../configs/consul.hcl.j2"
+        src: configs/consul.hcl.j2
         dest: /etc/consul.d/server.hcl
 
     - name: Add HashiCorp APT repository key

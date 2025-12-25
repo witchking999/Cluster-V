@@ -37,6 +37,15 @@ if ! grep -q 'direnv hook bash' "${HOME}/.bashrc" 2>/dev/null; then
 fi
 
 # Create a local env file for user-provided secrets and allow direnv.
+# Ensure direnv-controlled file exists (.envrc). If only envrc template exists, copy it.
+ENVRC_PATH="${REPO_ROOT}/.envrc"
+if [[ ! -f "${ENVRC_PATH}" ]]; then
+  if [[ -f "${REPO_ROOT}/envrc" ]]; then
+    cp "${REPO_ROOT}/envrc" "${ENVRC_PATH}"
+  else
+    touch "${ENVRC_PATH}"
+  }
+fi
 ENVRC_LOCAL="${REPO_ROOT}/.envrc.local"
 touch "${ENVRC_LOCAL}"
 direnv allow "${REPO_ROOT}" || true
@@ -51,6 +60,16 @@ fi
 
 PROMPT_KEYS=("${DEFAULT_API_KEYS[@]}" "${EXTRA_KEYS[@]}")
 if [[ ${#PROMPT_KEYS[@]} -gt 0 ]]; then
+  echo "🔐 Enter values for API keys (stored in ${ENVRC_PATH}, leave blank to skip):"
+  for key in "${PROMPT_KEYS[@]}"; do
+    # Avoid duplicate prompts for repeated keys.
+    if grep -q "^export ${key}=" "${ENVRC_PATH}"; then
+      continue
+    fi
+    read -r -s -p "  ${key}: " value || true
+    echo
+    if [[ -n "${value}" ]]; then
+      echo "export ${key}=${value}" >> "${ENVRC_PATH}"
   echo "🔐 Enter values for API keys (stored in .envrc.local, leave blank to skip):"
   for key in "${PROMPT_KEYS[@]}"; do
     # Avoid duplicate prompts for repeated keys.
@@ -73,6 +92,11 @@ if [[ ${#ADDITIONAL_KEYS[@]} -gt 0 ]]; then
       echo "export ${key}=${value}" >> "${ENVRC_LOCAL}"
     fi
   done
+fi
+
+# Allow direnv if present, but don't fail bootstrap if not.
+if command -v direnv >/dev/null 2>&1; then
+  direnv allow "${REPO_ROOT}" || true
 fi
 
 PRIMARY_IP="$(hostname -I | awk '{print $1}')"

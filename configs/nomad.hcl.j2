@@ -47,11 +47,11 @@ client {
     {%- if ansible_hostname == "klo01" %}
     keepalived_priority = "100"
     keepalived_priority_dns1 = "100"
-    keepalived_priority_dns2 = "{{ 200 | random(start=101) }}"
+    keepalived_priority_dns2 = "{{ range(101, 201) | random }}"
     {%- else %}
-    keepalived_priority = "{{ 200 | random(start=101) }}"
-    keepalived_priority_dns1 = "{{ 200 | random(start=101) }}"
-    keepalived_priority_dns2 = "{{ 200 | random(start=101) }}"
+    keepalived_priority = "{{ range(101, 201) | random }}"
+    keepalived_priority_dns1 = "{{ range(101, 201) | random }}"
+    keepalived_priority_dns2 = "{{ range(101, 201) | random }}"
     {%- endif %}
   }
 

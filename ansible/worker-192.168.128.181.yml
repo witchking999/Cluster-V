@@ -159,8 +159,7 @@
         name: nomad=1.10.4-1
         dpkg_options: 'force-confdef,force-confold'
         update_cache: true
-        state: latest
-        allow_downgrade: true
+        state: present
       when: nomad_check.stdout == "not_installed"
 
     - name: Install consul if not installed
@@ -168,8 +167,7 @@
         name: consul=1.19.1-1
         dpkg_options: 'force-confdef,force-confold'
         update_cache: true
-        state: latest
-        allow_downgrade: true
+        state: present
       when: consul_check.stdout == "not_installed"
 
     - name: Modify sysctl entry for net.ipv4.ip_nonlocal_bind

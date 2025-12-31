@@ -357,9 +357,12 @@
         tailscale up
         --authkey={{ tailscale_auth_key }}
         --hostname={{ tailscale_hostname }}
+        --accept-risk=lose-ssh
         --reset
       register: tailscale_up
       changed_when: "'Success' in tailscale_up.stdout or 'Success' in tailscale_up.stderr or tailscale_up.rc == 0"
+      when: tailscale_auth_key != "MISSING" and tailscale_auth_key != ""
+      ignore_errors: true
 
     - name: Show tailscale status
       command: tailscale status

@@ -41,8 +41,9 @@ variable "extra_api_keys" {
 }
 
 locals {
-  repo_root  = abspath("${path.module}/..")
-  nfs_server = coalesce(var.nfs_server, var.head_ip)
+  repo_root      = abspath("${path.module}/..")
+  nfs_server     = coalesce(var.nfs_server, var.head_ip)
+  bootstrap_script = abspath("${path.module}/scripts/bootstrap.sh")
 }
 
 resource "null_resource" "bootstrap" {
@@ -60,7 +61,7 @@ resource "null_resource" "bootstrap" {
       REPO_ROOT           = local.repo_root
       EXTRA_API_KEYS_JSON = jsonencode(var.extra_api_keys)
     }
-    command     = "bash ${path.module}/scripts/bootstrap.sh"
+    command     = "bash ${local.bootstrap_script}"
     working_dir = local.repo_root
   }
 }

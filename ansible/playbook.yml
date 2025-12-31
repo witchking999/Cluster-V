@@ -47,17 +47,26 @@
               find_multipaths yes
           }
 
+    - name: Check if packages are installed
+      shell: dpkg -l {{ item }} | grep -q "^ii" && echo "installed" || echo "not_installed"
+      register: package_checks
+      loop:
+        - nfs-common
+        - avahi-daemon
+        - open-iscsi
+        - lsscsi
+        - sg3-utils
+        - multipath-tools
+        - scsitools
+      changed_when: false
+      failed_when: false
+
     - name: Install Apt packages
       apt:
-        name:
-          - nfs-common
-          - avahi-daemon
-          - docker.io
-          - open-iscsi
-          - lsscsi
-          - sg3-utils
-          - multipath-tools
-          - scsitools
+        name: "{{ item.item }}"
+        state: present
+      loop: "{{ package_checks.results }}"
+      when: item.stdout == "not_installed"
 
     - name: Ensure NFS mounts are present in fstab (non-blocking)
       mount:
@@ -88,7 +97,6 @@
         - "192.168.128.111:/mnt/pool0/media/music        /home/media/Music    nfs4    _netdev,auto  0  1"
         - "192.168.128.111:/mnt/pool1/media/Movies       /home/media/Movies   nfs4    _netdev,auto  0  1"
         - "192.168.128.111:/mnt/pool0/media/audiobooks   /home/media/Books    nfs4    _netdev,auto  0  1"
-      notify: Mount Filesystems
 
     - name: Enable services
       systemd:
@@ -107,6 +115,7 @@
     - cheese
   serial: 1
   max_fail_percentage: 100
+  become: true
   vars:
     head_node_ip: "{{ lookup('env', 'HEAD_NODE_IP') | default('192.168.128.111', true) }}"
     nomad_server_ips_value: "{{ nomad_server_ips | default(lookup('env', 'NOMAD_SERVER_IPS') | default(head_node_ip, true), true) }}"
@@ -164,15 +173,35 @@
       apt_repository:
         repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
 
-    - name: Install Apt packages
+    - name: Check if nomad is installed
+      shell: dpkg -l nomad | grep -q "^ii" && echo "installed" || echo "not_installed"
+      register: nomad_check
+      changed_when: false
+      failed_when: false
+
+    - name: Check if consul is installed
+      shell: dpkg -l consul | grep -q "^ii" && echo "installed" || echo "not_installed"
+      register: consul_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install nomad if not installed
       apt:
-        name:
-          - nomad=1.10.4-1
-          - consul=1.19.1-1
+        name: nomad=1.10.4-1
         dpkg_options: 'force-confdef,force-confold'
         update_cache: true
         state: latest
         allow_downgrade: true
+      when: nomad_check.stdout == "not_installed"
+
+    - name: Install consul if not installed
+      apt:
+        name: consul=1.19.1-1
+        dpkg_options: 'force-confdef,force-confold'
+        update_cache: true
+        state: latest
+        allow_downgrade: true
+      when: consul_check.stdout == "not_installed"
 
     - name: Modify sysctl entry for net.ipv4.ip_nonlocal_bind
       sysctl:
@@ -244,10 +273,17 @@
       apt:
         update_cache: yes
 
-    - name: Install Tailscale
+    - name: Check if tailscale is installed
+      shell: dpkg -l tailscale | grep -q "^ii" && echo "installed" || echo "not_installed"
+      register: tailscale_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Tailscale if not installed
       apt:
         name: tailscale
         state: present
+      when: tailscale_check.stdout == "not_installed"
 
     - name: Enable and start tailscaled service
       service:
@@ -273,62 +309,3 @@
 
     - debug:
         var: tailscale_status.stdout
-
-- name: Install Zsh and Oh My Zsh with Agnoster theme
-  hosts: all
-  become: yes
-  remote_user: root
-  gather_facts: yes
-
-  vars:
-    my_zsh_user: "root"  # Change this to the desired user
-
-  tasks:
-    - name: Install zsh
-      apt:
-        name: zsh
-        state: present
-        update_cache: yes
-
-    - name: Ensure home directory path is known
-      user:
-        name: "{{ my_zsh_user }}"
-      register: user_info  # This captures the user details, including home directory.
-
-    - name: Check if Oh My Zsh is already installed
-      stat:
-        path: "/root/.oh-my-zsh"
-      register: oh_my_zsh_stat
-
-    - name: Check if zshrc exists
-      stat:
-        path: "/root/.zshrc"
-      register: zshrc_stat
-
-    - name: Clone Oh My Zsh
-      git:
-        repo: "https://github.com/ohmyzsh/ohmyzsh.git"
-        dest: "/root/.oh-my-zsh"
-      become_user: "{{ my_zsh_user }}"
-      when: not oh_my_zsh_stat.stat.exists
-
-    - name: Copy the default .zshrc template if not present
-      copy:
-        src: "/root/.oh-my-zsh/templates/zshrc.zsh-template"
-        dest: "/root/.zshrc"
-        remote_src: yes
-      become_user: "{{ my_zsh_user }}"
-      when: not zshrc_stat.stat.exists
-
-    - name: Set Oh My Zsh theme to agnoster
-      # Uses a regex replace to ensure 'ZSH_THEME="agnoster"'
-      replace:
-        path: "/root/.zshrc"
-        regexp: '^ZSH_THEME="[^"]+"'
-        replace: 'ZSH_THEME="agnoster"'
-      become_user: "{{ my_zsh_user }}"
-
-    - name: Change default shell to zsh for the user
-      user:
-        name: "{{ my_zsh_user }}"
-        shell: /usr/bin/zsh

@@ -9,7 +9,7 @@ From the repo root:
 ```bash
 cd terraform
 terraform init
-terraform apply \
+terraform apply -input=true \
   -var role=head \
   -var head_ip=192.168.128.111 \
   -var 'extra_api_keys=["ANTHROPIC_API_KEY","COHERE_API_KEY"]'
@@ -18,7 +18,7 @@ terraform apply \
 Or for a worker (auto-detects the local IP and registers as a client):
 
 ```bash
-terraform apply \
+terraform apply -input=true \
   -var role=worker \
   -var head_ip=192.168.128.111
 ```

@@ -55,19 +55,36 @@
         - "{{ head_node_ip }}:/mnt/pool0/media/music        /home/media/Music    nfs4    _netdev,auto  0  1"
         - "{{ head_node_ip }}:/mnt/pool1/media/Movies       /home/media/Movies   nfs4    _netdev,auto  0  1"
         - "{{ head_node_ip }}:/mnt/pool0/media/audiobooks   /home/media/Books    nfs4    _netdev,auto  0  1"
-      notify: Mount Filesystems
 
-    - name: Install NFS and Docker dependencies
+    - name: Check if packages are installed
+      shell: dpkg -l {{ item }} | grep -q "^ii" && echo "installed" || echo "not_installed"
+      register: package_checks
+      loop:
+        - nfs-common
+        - avahi-daemon
+        - open-iscsi
+        - lsscsi
+        - sg3-utils
+        - multipath-tools
+        - scsitools
+      changed_when: false
+      failed_when: false
+
+    - name: Install Apt packages
       apt:
-        name:
-          - nfs-common
-          - docker.io
+        name: "{{ item.item }}"
         state: present
-        update_cache: yes
+      loop: "{{ package_checks.results }}"
+      when: item.stdout == "not_installed"
 
-  handlers:
-    - name: Mount Filesystems
-      command: mount -a
+    - name: Enable services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      with_items:
+        - open-iscsi
+        - multipath-tools
 
 - name: Configure worker 192.168.128.80 as Nomad/Consul client
   hosts: 192.168.128.80
@@ -94,28 +111,24 @@
     - name: Manage systemd service file nomad
       copy:
         src: "{{ playbook_dir }}/../configs/nomad.service"
-        src: configs/nomad.service
         dest: /lib/systemd/system/nomad.service
       notify: Reload systemd
 
     - name: Manage systemd service file consul
       copy:
         src: "{{ playbook_dir }}/../configs/consul.service"
-        src: configs/consul.service
         dest: /lib/systemd/system/consul.service
       notify: Reload systemd
 
     - name: manage nomad config
       template:
         src: "{{ playbook_dir }}/../configs/nomad.hcl.j2"
-        src: configs/nomad.hcl.j2
         dest: /etc/nomad.d/nomad.hcl
       notify: Restart Service
 
     - name: manage consul config
       template:
         src: "{{ playbook_dir }}/../configs/consul.hcl.j2"
-        src: configs/consul.hcl.j2
         dest: /etc/consul.d/server.hcl
 
     - name: Add HashiCorp APT repository key
@@ -129,15 +142,35 @@
       apt_repository:
         repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
 
-    - name: Install Apt packages
+    - name: Check if nomad is installed
+      shell: dpkg -l nomad | grep -q "^ii" && echo "installed" || echo "not_installed"
+      register: nomad_check
+      changed_when: false
+      failed_when: false
+
+    - name: Check if consul is installed
+      shell: dpkg -l consul | grep -q "^ii" && echo "installed" || echo "not_installed"
+      register: consul_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install nomad if not installed
       apt:
-        name:
-          - nomad=1.10.4-1
-          - consul=1.19.1-1
+        name: nomad=1.10.4-1
         dpkg_options: 'force-confdef,force-confold'
         update_cache: true
         state: latest
         allow_downgrade: true
+      when: nomad_check.stdout == "not_installed"
+
+    - name: Install consul if not installed
+      apt:
+        name: consul=1.19.1-1
+        dpkg_options: 'force-confdef,force-confold'
+        update_cache: true
+        state: latest
+        allow_downgrade: true
+      when: consul_check.stdout == "not_installed"
 
     - name: Modify sysctl entry for net.ipv4.ip_nonlocal_bind
       sysctl:

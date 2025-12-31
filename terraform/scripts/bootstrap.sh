@@ -44,7 +44,7 @@ if [[ ! -f "${ENVRC_PATH}" ]]; then
     cp "${REPO_ROOT}/envrc" "${ENVRC_PATH}"
   else
     touch "${ENVRC_PATH}"
-  }
+  fi
 fi
 ENVRC_LOCAL="${REPO_ROOT}/.envrc.local"
 touch "${ENVRC_LOCAL}"
@@ -60,38 +60,27 @@ fi
 
 PROMPT_KEYS=("${DEFAULT_API_KEYS[@]}" "${EXTRA_KEYS[@]}")
 if [[ ${#PROMPT_KEYS[@]} -gt 0 ]]; then
-  echo "🔐 Enter values for API keys (stored in ${ENVRC_PATH}, leave blank to skip):"
-  for key in "${PROMPT_KEYS[@]}"; do
-    # Avoid duplicate prompts for repeated keys.
-    if grep -q "^export ${key}=" "${ENVRC_PATH}"; then
-      continue
-    fi
-    read -r -s -p "  ${key}: " value || true
-    echo
-    if [[ -n "${value}" ]]; then
-      echo "export ${key}=${value}" >> "${ENVRC_PATH}"
-  echo "🔐 Enter values for API keys (stored in .envrc.local, leave blank to skip):"
-  for key in "${PROMPT_KEYS[@]}"; do
-    # Avoid duplicate prompts for repeated keys.
-    if grep -q "^export ${key}=" "${ENVRC_LOCAL}"; then
-      continue
-    fi
-# Prompt for any additional API keys requested by the caller.
-if command -v jq >/dev/null 2>&1; then
-  mapfile -t ADDITIONAL_KEYS < <(echo "${EXTRA_API_KEYS_JSON}" | jq -r '.[]?' 2>/dev/null || true)
-else
-  ADDITIONAL_KEYS=()
-fi
-
-if [[ ${#ADDITIONAL_KEYS[@]} -gt 0 ]]; then
-  echo "🔐 Enter values for additional API keys (stored in .envrc.local, leave blank to skip):"
-  for key in "${ADDITIONAL_KEYS[@]}"; do
-    read -r -s -p "  ${key}: " value || true
-    echo
-    if [[ -n "${value}" ]]; then
-      echo "export ${key}=${value}" >> "${ENVRC_LOCAL}"
-    fi
-  done
+  if [[ -t 0 ]]; then
+    # Interactive terminal - prompt for API keys
+    echo "🔐 Enter values for API keys (stored in ${ENVRC_PATH}, leave blank to skip):"
+    for key in "${PROMPT_KEYS[@]}"; do
+      # Avoid duplicate prompts for repeated keys.
+      if grep -q "^export ${key}=" "${ENVRC_PATH}" 2>/dev/null; then
+        echo "  ${key}: (already set in ${ENVRC_PATH}, skipping)"
+        continue
+      fi
+      read -r -s -p "  ${key}: " value || true
+      echo
+      if [[ -n "${value}" ]]; then
+        echo "export ${key}=${value}" >> "${ENVRC_PATH}"
+      fi
+    done
+  else
+    # Non-interactive - skip prompts but inform user
+    echo "⚠️  Non-interactive mode: Skipping API key prompts."
+    echo "   To set API keys, run manually or add them to ${ENVRC_PATH}"
+    echo "   Keys requested: ${PROMPT_KEYS[*]}"
+  fi
 fi
 
 # Allow direnv if present, but don't fail bootstrap if not.

@@ -1,7 +1,7 @@
 [Unit]
 Description=nomad.agent
-Requires=network-online.target tailscaled.service
-After=network-online.target tailscaled.service
+Requires=network-online.target tailscaled.service docker.service
+After=network-online.target tailscaled.service docker.service
 
 [Service]
 ExecStartPre=/bin/sleep 30

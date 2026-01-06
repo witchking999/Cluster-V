@@ -236,7 +236,7 @@
 
     # Ensure Docker exposes nvidia runtime if not already present
     - name: Check docker runtimes
-      command: docker info --format '{{ .Runtimes }}'
+      shell: docker info --format '{{"{{"}} .Runtimes {{"}}"}}'
       register: docker_runtimes
       changed_when: false
       failed_when: false

@@ -1,0 +1,54 @@
+job "surrealdb-setup" {
+  region = var.region
+  datacenters = ["dc1"]
+  type = "batch"
+
+  meta {
+    job_file = "nomad_jobs/storage-backends/surrealdb/setup.job"
+    version = "1"
+  }
+
+  group "setup" {
+    volume "surrealdb-data" {
+      type      = "host"
+      read_only = false
+      source    = "surrealdb-data"
+    }
+
+    task "surrealdb-init" {
+      driver = "docker"
+
+      volume_mount {
+        volume      = "surrealdb-data"
+        destination = "/data"
+        read_only   = false
+      }
+
+      config {
+        image = "surrealdb/surrealdb:latest"
+        args = [
+          "start",
+          "--user", "root",
+          "--pass", "ChAnGeMe",
+          "--log", "info",
+          "rocksdb:/data/surrealdb.db"
+        ]
+      }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+  default = "global"
+}
+
+
+
+
+

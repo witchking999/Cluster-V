@@ -28,11 +28,9 @@ job "neo4j" {
     }
 
     volume "neo4j-data" {
-      type            = "csi"
-      read_only       = false
-      source          = "neo4j-data"
-      access_mode     = "single-node-writer"
-      attachment_mode = "file-system"
+      type      = "host"
+      read_only = false
+      source    = "neo4j-data"
     }
 
 

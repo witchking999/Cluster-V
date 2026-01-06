@@ -1,0 +1,57 @@
+job "memgraph-setup" {
+  region      = var.region
+  datacenters = [var.datacenter]
+  type        = "batch"
+
+  meta {
+    job_file = "nomad_jobs/storage-backends/memgraph/setup.job"
+    version  = "1"
+  }
+
+  group "setup" {
+    constraint {
+      attribute = "${node.unique.id}"
+      operator  = "="
+      value     = "781790f9-602e-4100-6783-7eeb55db185c"
+    }
+
+    volume "memgraph-data" {
+      type      = "host"
+      read_only = false
+      source    = "memgraph-data"
+    }
+
+    task "memgraph-prep" {
+      driver = "docker"
+
+      volume_mount {
+        volume      = "memgraph-data"
+        destination = "/var/lib/memgraph"
+        read_only   = false
+      }
+
+      config {
+        image   = "busybox:latest"
+        command = "sh"
+        args = [
+          "-c",
+          "mkdir -p /var/lib/memgraph && chmod -R 777 /var/lib/memgraph && echo 'Memgraph data directory prepared'"
+        ]
+      }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+}
+
+variable "datacenter" {
+  type = string
+}
+

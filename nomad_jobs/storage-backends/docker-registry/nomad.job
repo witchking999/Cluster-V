@@ -8,12 +8,6 @@ job "docker-registry" {
 version = "4"
   }
 
-  constraint {
-    attribute = "${meta.shared_mount}"
-    operator  = "="
-    value     = "true"
-  }
-
   group "infrastructure" {
     count = 1 
 
@@ -22,14 +16,6 @@ version = "4"
         static = "5000"
         host_network = "lan"
       }
-    }
-
-    volume "docker-registry" {
-      type      = "csi"
-      read_only = false
-      source    = "docker-registry-data"
-      access_mode = "single-node-writer"
-      attachment_mode = "file-system"
     }
 
 
@@ -45,12 +31,10 @@ version = "4"
         image = "registry:3.0.0"
         ports = ["http"]
         network_mode = "host"
-      }
-
-      volume_mount {
-        volume      = "docker-registry"
-        destination = "/data"
-        read_only   = false
+        # Persist data on the shared mount instead of CSI (works without TrueNAS)
+        volumes = [
+          "${var.shared_dir}docker-registry:/data"
+        ]
       }
 
       env {
@@ -89,4 +73,5 @@ variable "tld" {
 
 variable "shared_dir" {
     type = string
+    default = "/home/shared/"
 }

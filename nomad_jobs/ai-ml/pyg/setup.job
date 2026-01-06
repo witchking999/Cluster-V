@@ -1,0 +1,63 @@
+job "pyg-setup" {
+  region = var.region
+  datacenters = ["dc1"]
+  type = "batch"
+
+  meta {
+    job_file = "nomad_jobs/ai-ml/pyg/setup.job"
+    version = "1"
+  }
+
+  group "setup" {
+    volume "surrealdb-data" {
+      type      = "host"
+      read_only = false
+      source    = "surrealdb-data"
+    }
+
+    volume "memgraph-mage-data" {
+      type      = "host"
+      read_only = false
+      source    = "memgraph-mage-data"
+    }
+
+    task "pyg-init" {
+      driver = "docker"
+
+      volume_mount {
+        volume      = "surrealdb-data"
+        destination = "/data"
+        read_only   = false
+      }
+
+      volume_mount {
+        volume      = "memgraph-mage-data"
+        destination = "/graph-data"
+        read_only   = false
+      }
+
+      config {
+        image   = "busybox:latest"
+        command = "sh"
+        args = [
+          "-c",
+          "mkdir -p /data/pyg /graph-data/pyg && chmod -R 777 /data/pyg /graph-data/pyg && echo 'PyG shared directories prepared on NFS volumes'"
+        ]
+      }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+  default = "global"
+}
+
+
+
+

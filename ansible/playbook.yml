@@ -234,6 +234,46 @@
       apt_repository:
         repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
 
+    # NVIDIA container runtime so Nomad sees driver.docker.runtimes includes "nvidia"
+    - name: Add NVIDIA container runtime apt key
+      apt_key:
+        url: https://nvidia.github.io/libnvidia-container/gpgkey
+        state: present
+      register: nvidia_key
+
+    - name: Add NVIDIA container runtime apt repository
+      apt_repository:
+        repo: "deb https://nvidia.github.io/libnvidia-container/stable/ubuntu{{ ansible_distribution_version }}/$(ARCH) /"
+        filename: nvidia-container-runtime
+      register: nvidia_repo
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Update apt cache after adding NVIDIA repo
+      apt:
+        update_cache: yes
+      when: nvidia_repo is changed or nvidia_key is changed
+
+    - name: Ensure NVIDIA container runtime packages are installed
+      apt:
+        name:
+          - nvidia-container-toolkit
+          - nvidia-container-runtime
+        state: present
+        update_cache: yes
+
+    - name: Configure Docker to expose nvidia runtime
+      command: nvidia-ctk runtime configure --runtime=docker
+      register: nvidia_ctk_config
+      changed_when: "'Configuration updated' in nvidia_ctk_config.stdout"
+      failed_when: false  # safe to re-run; ignore if command already applied
+
+    - name: Restart docker to pick up nvidia runtime
+      service:
+        name: docker
+        state: restarted
+      when: ansible_service_mgr == "systemd"
+      notify: Restart Service
+
     - name: Check if nomad is installed
       shell: dpkg -l nomad | grep -q "^ii" && echo "installed" || echo "not_installed"
       register: nomad_check

@@ -1,14 +1,14 @@
 job "memgraph" {
   region      = var.region
-  datacenters = [var.datacenter]
+  datacenters = ["dc1"]
   type        = "service"
 
   meta {
     job_file = "nomad_jobs/storage-backends/memgraph/nomad.job"
-    version  = "1"
+    version  = "10"
   }
 
-  group "graph" {
+  group "memgraph" {
     count = 1
 
     network {
@@ -21,33 +21,32 @@ job "memgraph" {
         static       = 7444
         host_network = "lan"
       }
-      port "lab" {
-        static       = 3001
-        host_network = "lan"
-      }
     }
 
-    restart {
-      attempts = 3
-      delay    = "30s"
-      interval = "10m"
-      mode     = "delay"
+    volume "memgraph-mage-data" {
+      type      = "host"
+      read_only = false
+      source    = "memgraph-mage-data"
     }
 
     update {
       max_parallel     = 1
-      min_healthy_time = "45s"
+      min_healthy_time = "30s"
       auto_revert      = true
     }
 
     task "memgraph" {
       driver = "docker"
+
       config {
-        image  = "memgraph/memgraph-mage"
-        ports  = ["bolt", "mgconsole"]
-        volumes = [
-          "${var.memgraph_data_dir}:/var/lib/memgraph"
-        ]
+        image = "memgraph/memgraph-mage:latest"
+        ports = ["bolt", "mgconsole"]
+      }
+
+      volume_mount {
+        volume      = "memgraph-mage-data"
+        destination = "/var/lib/memgraph"
+        read_only   = false
       }
 
       service {
@@ -69,48 +68,10 @@ job "memgraph" {
       }
     }
 
-    task "memgraph-lab" {
-      driver = "docker"
-      config {
-        image = "memgraph/lab"
-        ports = ["lab"]
-        env = {
-          QUICK_CONNECT_MG_HOST = "memgraph.service.consul"
-          QUICK_CONNECT_MG_PORT = "7687"
-        }
-      }
-
-      service {
-        name = "memgraph-lab"
-        tags = ["traefik.enable=true"]
-        port = "lab"
-
-        check {
-          type     = "tcp"
-          port     = "lab"
-          interval = "30s"
-          timeout  = "3s"
-        }
-      }
-
-      resources {
-        cpu    = 300
-        memory = 1024
-      }
-    }
   }
 }
 
 variable "region" {
   type = string
-}
-
-variable "datacenter" {
-  type = string
-}
-
-variable "memgraph_data_dir" {
-  type        = string
-  description = "Host directory for Memgraph persistence"
-  default     = "/home/shared/memgraph"
+  default = "global"
 }

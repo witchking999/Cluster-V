@@ -1,0 +1,110 @@
+job "surrealdb" {
+  region      = var.region
+  datacenters = ["dc1"]
+  type        = "service"
+
+  meta {
+    job_file = "nomad_jobs/storage-backends/surrealdb/nomad.job"
+    version  = "22"
+  }
+
+  group "surrealdb" {
+    count = 1
+
+    network {
+      mode = "host"
+      port "http" {
+        static       = 8001
+        host_network = "lan"
+      }
+    }
+
+    volume "surrealdb-data" {
+      type      = "host"
+      read_only = false
+      source    = "surrealdb-data"
+    }
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "30s"
+      auto_revert      = true
+    }
+
+    task "prep-volume" {
+      driver = "docker"
+
+      volume_mount {
+        volume      = "surrealdb-data"
+        destination = "/data"
+        read_only   = false
+      }
+
+      config {
+        image   = "busybox:latest"
+        command = "sh"
+        args = [
+          "-c",
+          "mkdir -p /data && chmod -R 777 /data && echo 'SurrealDB data directory prepared'"
+        ]
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+    }
+
+    task "surrealdb" {
+      driver = "docker"
+
+      config {
+        image = "surrealdb/surrealdb:latest"
+        args = [
+          "start",
+          "--bind", "0.0.0.0:${NOMAD_PORT_http}",
+          "--user", "root",
+          "--pass", "ChAnGeMe",
+          "--log", "info",
+          "rocksdb:/data/surrealdb.db"
+        ]
+        ports = ["http"]
+      }
+
+      volume_mount {
+        volume      = "surrealdb-data"
+        destination = "/data"
+        read_only   = false
+      }
+
+      service {
+        name = "surrealdb"
+        tags = ["database", "graph-db", "ai"]
+        port = "http"
+
+        check {
+          type     = "tcp"
+          port     = "http"
+          interval = "30s"
+          timeout  = "3s"
+        }
+      }
+
+      resources {
+        cpu    = 500
+        memory = 2048
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+  default = "global"
+}
+

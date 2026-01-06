@@ -22,3 +22,7 @@ export MISTRAL_API_KEY=CHANGE_ME_MISTRAL_API_KEY
 export NV_NIM_KEY=CHANGE_ME_NV_NIM_KEY
 export HF_TOKEN=CHANGE_ME_HF_TOKEN
 export VIBE_API_KEY=CHANGE_ME_VIBE_API_KEY
+
+# Nomad job variables for AI/ML workloads
+export NOMAD_VAR_nvidia_api_key=$NVIDIA_API_KEY
+export NOMAD_VAR_hf_token=$HF_TOKEN

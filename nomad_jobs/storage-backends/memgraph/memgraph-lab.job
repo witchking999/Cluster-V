@@ -1,0 +1,77 @@
+job "memgraph-lab" {
+  region      = var.region
+  datacenters = ["dc1"]
+  type        = "service"
+
+  meta {
+    job_file = "nomad_jobs/storage-backends/memgraph/memgraph-lab.job"
+    version  = "1"
+  }
+
+  group "lab" {
+    count = 1
+
+    network {
+      mode = "host"
+      port "lab" {
+        static       = 3000
+        host_network = "lan"
+      }
+    }
+
+    restart {
+      attempts = 3
+      delay    = "30s"
+      interval = "10m"
+      mode     = "delay"
+    }
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "30s"
+      auto_revert      = true
+    }
+
+    task "memgraph-lab" {
+      driver = "docker"
+      config {
+        image = "memgraph/lab"
+        ports = ["lab"]
+      }
+
+      env {
+        QUICK_CONNECT_MG_HOST = "memgraph.service.consul"
+        QUICK_CONNECT_MG_PORT = "7687"
+      }
+
+      service {
+        name = "memgraph-lab"
+        tags = ["traefik.enable=true"]
+        port = "lab"
+
+        check {
+          type     = "tcp"
+          port     = "lab"
+          interval = "30s"
+          timeout  = "3s"
+        }
+      }
+
+      resources {
+        cpu    = 300
+        memory = 1024
+      }
+    }
+  }
+}
+
+variable "region" {
+  type = string
+  default = "global"
+}
+
+
+
+
+
+

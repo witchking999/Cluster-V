@@ -10,8 +10,9 @@ base_deployments = coredns docker-registry haproxy
 
 # Find the nomad job file for a given service name ($1) within nomad_jobs/ structure
 # Usage: $(call find_job_file, service_name)
-# Example: $(call find_job_file, coredns) -> nomad_jobs/core-infra/coredns/coredns.job (or .nomad)
-find_job_file = $(shell find nomad_jobs/ -mindepth 2 -maxdepth 3 -type f \( -name '$1.job' -o -name '$1.nomad' \) -print -quit)
+# Example: $(call find_job_file, coredns) -> nomad_jobs/core-infra/coredns/nomad.job
+# Looks for: $1.job, $1.nomad, or nomad.job in a directory named $1
+find_job_file = $(shell find nomad_jobs/ -mindepth 2 -maxdepth 3 -type d -name '$1' -exec find {} -maxdepth 1 -type f \( -name 'nomad.job' -o -name '$1.job' -o -name '$1.nomad' \) -print -quit \;)
 
 .PHONY: dc1-%
 dc1-%: ## Deploy specific job to dc1 (searches within nomad_jobs/ structure)
